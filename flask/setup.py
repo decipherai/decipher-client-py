@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='decipher-sdk',
-    version='0.0.13',
+    version='0.0.14',
     package_dir={'': 'src'},
     packages=find_packages(where='src'),
     install_requires=[

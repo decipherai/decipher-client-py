@@ -23,8 +23,8 @@ class DecipherMonitor:
     def __init__(self, codebase_id, customer_id):
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        #self.endpoint = "http://localhost:3005/api/exception_upload"
+        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        self.endpoint = "http://localhost:5001/api/exception_upload"
         self.messages = []  # Initialize the messages list
         self.exception_occurred = False  # Flag to indicate an exception has occurred
         self.connect_to_signals()
@@ -217,6 +217,15 @@ class DecipherMonitor:
             pass
 
     @safe_method
+    def capture_error(self, error):
+        if has_request_context():
+            self.capture_error_with_exception(request._get_current_object(), error)
+        else:
+            # Handle cases where there is no Flask request context
+            pass
+
+
+    @safe_method
     def safe_stringify(self, obj, indent=2):
         try:
             return json.dumps(obj, indent=indent, default=str)
@@ -228,3 +237,11 @@ _decipher_monitor_instance = None
 def init(codebase_id, customer_id):
     global _decipher_monitor_instance
     _decipher_monitor_instance = DecipherMonitor(codebase_id, customer_id)
+
+
+def capture_error(error):
+    if _decipher_monitor_instance:
+        _decipher_monitor_instance.capture_error(error)
+    else:
+        # Handle the case where DecipherMonitor is not initialized
+        pass

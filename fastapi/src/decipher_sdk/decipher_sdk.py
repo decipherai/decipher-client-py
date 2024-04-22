@@ -9,6 +9,11 @@ from starlette.types import ASGIApp
 import functools
 import asyncio
 import linecache
+from contextvars import ContextVar
+from fastapi import Request
+
+current_request = ContextVar("decipher_current_request")
+current_messages = ContextVar("current_messages", default=[])
 
 def safe_method(func):
     @functools.wraps(func)
@@ -28,25 +33,25 @@ class DecipherMonitor(BaseHTTPMiddleware):
         super().__init__(app)
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        self.endpoint = "http://localhost:5001/api/exception_upload"
-        self.messages = []
+        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        #self.endpoint = "http://localhost:5001/api/exception_upload"
         self.original_print = builtins.print
         builtins.print = self.custom_print
 
     async def dispatch(self, request: Request, call_next):
+        request_token = current_request.set(request)
+        messages_token = current_messages.set([])
         try:
             response = await call_next(request)
             if response.status_code != 200:
-                # Handle non-200 responses, capture as error
                 await self.capture_error_with_response(request, response)
         except Exception as e:
-            # Handle exception, capture error data
             await self.capture_error_with_exception(request, e)
             raise e
         finally:
+            current_request.reset(request_token)
+            current_messages.reset(messages_token)
             builtins.print = self.original_print
-            self.clear_messages()
         return response
 
     @safe_method
@@ -95,21 +100,28 @@ class DecipherMonitor(BaseHTTPMiddleware):
             "response_body": response_body,
             "status_code": status_code,
             "is_uncaught_exception": exception is not None,
-            'messages': self.messages
+            'messages': current_messages.get()
         }
 
         return data
     
+    @safe_method
     def get_timestamp(self):
         return datetime.utcnow().isoformat() + 'Z'
-
+    
+    @safe_method
+    def add_message(message: str, level: str = "info"):
+        messages = current_messages.get()
+        messages.append({"message": message, "level": level})
+    
+    @safe_method
     def get_stack_trace_with_code(self, exception):
         if exception is None:
             return []
         
         tb = traceback.extract_tb(exception.__traceback__)
         formatted_trace = []
-        context = 5  # Number of lines to include around the error line
+        context = 100  # Number of lines to include around the error line
         for frame, line_number in [(tb_frame, tb_lineno) for tb_frame, tb_lineno in traceback.walk_tb(exception.__traceback__)]:
             filename = frame.f_code.co_filename
             function_name = frame.f_code.co_name
@@ -137,6 +149,7 @@ class DecipherMonitor(BaseHTTPMiddleware):
         
         return formatted_trace
     
+    @safe_method
     def get_code_context(self, filename, line_number, context=5):
         start_line = max(1, line_number - context)
         end_line = line_number + context
@@ -163,8 +176,9 @@ class DecipherMonitor(BaseHTTPMiddleware):
             pass
 
     def custom_print(self, *args, **kwargs):
+        messages = current_messages.get()
         message = ' '.join(str(arg) for arg in args)
-        self.messages.append({
+        messages.append({
             "message": message,
             "level": "log",
             "timestamp": self.get_timestamp()
@@ -184,6 +198,11 @@ def init(app, codebase_id, customer_id):
     _decipher_monitor_instance = DecipherMonitor(app, codebase_id, customer_id)
     app.add_middleware(DecipherMonitor, codebase_id=codebase_id, customer_id=customer_id)
 
-async def capture_error(request: Request, error):
-    if _decipher_monitor_instance:
+@safe_method
+async def capture_error(error):
+    request = current_request.get()
+    if request and _decipher_monitor_instance:
         await _decipher_monitor_instance.capture_error_with_exception(request, error)
+    else:
+        # Log error or handle cases where the request context is not available
+        pass

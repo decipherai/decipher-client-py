@@ -33,26 +33,28 @@ class DecipherMonitor(BaseHTTPMiddleware):
         super().__init__(app)
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        #self.endpoint = "http://localhost:3000/api/exception_upload"
+        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        self.endpoint = "http://localhost:3000/api/exception_upload"
         self.original_print = builtins.print
         builtins.print = self.custom_print
 
-    async def dispatch(self, request: Request, call_next):
+    async def __call__(self, scope, receive, send):
+        # Setup or any preparation before handling the request
+        request = Request(scope, receive=receive)
         request_token = current_request.set(request)
         messages_token = current_messages.set([])
         try:
-            response = await call_next(request)
-            # if response.status_code != 200:
-            #     await self.capture_error_with_response(request, response)
-        except Exception as e:
-            await self.capture_error_with_exception(request, e, isManual = False)
-            raise e
+            # Pass control to the next application in the stack
+            await self.app(scope, receive, send)
+        except Exception as exc:
+            # Handle the exception (e.g., logging, modifying response to client)
+            await self.capture_error_with_exception(request, exc, isManual = False)
+            raise exc from None
         finally:
             current_request.reset(request_token)
             current_messages.reset(messages_token)
             builtins.print = self.original_print
-        return response
+
 
     async def capture_error_with_response(self, request: Request, response: Response):
         data = await self.prepare_data(request, response=response)

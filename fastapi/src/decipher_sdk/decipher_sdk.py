@@ -34,8 +34,8 @@ class DecipherMonitor(BaseHTTPMiddleware):
         super().__init__(app)
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        self.endpoint = "http://localhost:3000/api/exception_upload"
+        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        #self.endpoint = "http://localhost:3000/api/exception_upload"
         self.original_print = builtins.print
         builtins.print = self.custom_print
 
@@ -162,16 +162,7 @@ class DecipherMonitor(BaseHTTPMiddleware):
     def get_local_variables(self, frame):
         return {var: repr(value) for var, value in frame.f_locals.items()}
 
-    # def send_to_decipher(self, data):
-    #     try:
-    #         requests.post(self.endpoint, json=data)
-    #     except requests.RequestException as e:
-    #         pass
-
     async def send_to_decipher(self, data):
-        """
-        Asynchronously send data to the decipher endpoint.
-        """
         try:
             await asyncio.to_thread(requests.post, self.endpoint, json=data)
         except requests.RequestException as e:
@@ -202,32 +193,11 @@ def init(app, codebase_id, customer_id):
     app.add_middleware(DecipherMonitor, codebase_id=codebase_id, customer_id=customer_id)
 
 def capture_error(error):
-    """
-    Capture errors and handle them according to the context (sync or async).
-    """
     request = current_request.get()
-    print("[Decipher] Capturing error")
     if request and _decipher_monitor_instance:
         try:
             if asyncio.get_event_loop().is_running():
                 # Asynchronous context: Use asyncio to handle it
-                print("[Decipher] Asynchronous context")
                 asyncio.create_task(_decipher_monitor_instance.capture_error_with_exception(request, error))
         except Exception as e:
-            print("[Decipher] Synchronous context")
             asyncio.run(_decipher_monitor_instance.capture_error_with_exception(request, error))
-            # Synchronous context: Use a thread to handle async operation
-            #thread = threading.Thread(target=lambda: asyncio.run(_decipher_monitor_instance.capture_error_with_exception(request, error)))
-            #thread.start()
-    else:
-        # Log error or handle cases where the request context is not available
-        print("Error captured without request context:", str(error))
-
-
-# def capture_error(error):
-#     request = current_request.get()
-#     if request and _decipher_monitor_instance:
-#         _decipher_monitor_instance.capture_error_with_exception(request, error)
-#     else:
-#         # Log error or handle cases where the request context is not available
-#         pass

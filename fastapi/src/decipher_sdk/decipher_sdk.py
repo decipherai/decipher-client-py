@@ -46,7 +46,7 @@ class DecipherMonitor(BaseHTTPMiddleware):
             # if response.status_code != 200:
             #     await self.capture_error_with_response(request, response)
         except Exception as e:
-            await self.capture_error_with_exception(request, e)
+            await self.capture_error_with_exception(request, e, isManual = False)
             raise e
         finally:
             current_request.reset(request_token)
@@ -58,11 +58,11 @@ class DecipherMonitor(BaseHTTPMiddleware):
         data = await self.prepare_data(request, response=response)
         await self.send_to_decipher(data)
 
-    async def capture_error_with_exception(self, request: Request, exception: Exception):
-        data = await self.prepare_data(request, exception=exception)
+    async def capture_error_with_exception(self, request: Request, exception: Exception, isManual = True):
+        data = await self.prepare_data(request, exception=exception, isManual = isManual)
         await self.send_to_decipher(data)
 
-    async def prepare_data(self, request: Request, response=None, exception=None):
+    async def prepare_data(self, request: Request, response=None, exception=None, isManual = False):
         request_body = await request.body()
         try:
             request_body = json.loads(request_body.decode())
@@ -71,7 +71,12 @@ class DecipherMonitor(BaseHTTPMiddleware):
 
         # Initialize response data
         response_body = {}
-        status_code = 500  # Default to 500 unless a response object is provided
+
+        if (isManual):
+            status_code = 0
+        else:
+            status_code = 500  # Default to 500 unless a response object is provided
+
         if response:
             status_code = response.status_code
             try:
@@ -197,6 +202,6 @@ def capture_error(error):
         try:
             if asyncio.get_event_loop().is_running():
                 # Asynchronous context: Use asyncio to handle it
-                asyncio.create_task(_decipher_monitor_instance.capture_error_with_exception(request, error))
+                asyncio.create_task(_decipher_monitor_instance.capture_error_with_exception(request, error, isManual = True))
         except Exception as e:
-            asyncio.run(_decipher_monitor_instance.capture_error_with_exception(request, error))
+            asyncio.run(_decipher_monitor_instance.capture_error_with_exception(request, error, isManual = True))

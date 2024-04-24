@@ -11,6 +11,7 @@ import asyncio
 import linecache
 from contextvars import ContextVar
 from fastapi import Request
+import httpx
 
 current_request = ContextVar("decipher_current_request")
 current_messages = ContextVar("current_messages", default=[])
@@ -33,8 +34,8 @@ class DecipherMonitor(BaseHTTPMiddleware):
         super().__init__(app)
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        #self.endpoint = "http://localhost:5001/api/exception_upload"
+        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        self.endpoint = "http://localhost:3000/api/exception_upload"
         self.original_print = builtins.print
         builtins.print = self.custom_print
 
@@ -45,26 +46,27 @@ class DecipherMonitor(BaseHTTPMiddleware):
             response = await call_next(request)
             if response.status_code != 200:
                 await self.capture_error_with_response(request, response)
+            return response
         except Exception as e:
-            await self.capture_error_with_exception(request, e)
-            raise e
+            try:
+                await self.capture_error_with_exception(request, e)
+            except Exception as inner_exception:
+                # Log the inner exception if needed
+                pass
+            raise e from None
         finally:
             current_request.reset(request_token)
             current_messages.reset(messages_token)
             builtins.print = self.original_print
-        return response
 
-    @safe_method
     async def capture_error_with_response(self, request: Request, response: Response):
         data = await self.prepare_data(request, response=response)
         await self.send_to_decipher(data)
 
-    @safe_method
     async def capture_error_with_exception(self, request: Request, exception: Exception):
         data = await self.prepare_data(request, exception=exception)
         await self.send_to_decipher(data)
 
-    @safe_method
     async def prepare_data(self, request: Request, response=None, exception=None):
         request_body = await request.body()
         try:
@@ -77,11 +79,17 @@ class DecipherMonitor(BaseHTTPMiddleware):
         status_code = 500  # Default to 500 unless a response object is provided
         if response:
             status_code = response.status_code
-            try:
-                response_body = json.loads(response.body.decode())
-            except json.JSONDecodeError:
-                response_body = response.body.decode()  # Use raw body if JSON parsing fails
-
+            if hasattr(response, 'body'):
+                try:
+                    response_body = json.loads(response.body.decode())
+                except json.JSONDecodeError:
+                    response_body = response.body.decode()  # Use raw body if JSON parsing fails
+            elif hasattr(response, 'body_iterator'):
+                # If the response is streaming, you might not be able to directly access the body content
+                response_body = "Streaming content; body not accessible"
+            else:
+                response_body = "Unknown response type; body not accessible"
+                
         # Generate stack trace and local variables if an exception is provided
         stack_trace = []
         if exception:
@@ -105,23 +113,20 @@ class DecipherMonitor(BaseHTTPMiddleware):
 
         return data
     
-    @safe_method
     def get_timestamp(self):
         return datetime.utcnow().isoformat() + 'Z'
     
-    @safe_method
     def add_message(message: str, level: str = "info"):
         messages = current_messages.get()
         messages.append({"message": message, "level": level})
     
-    @safe_method
     def get_stack_trace_with_code(self, exception):
         if exception is None:
             return []
         
         tb = traceback.extract_tb(exception.__traceback__)
         formatted_trace = []
-        context = 100  # Number of lines to include around the error line
+        context = 5  # Number of lines to include around the error line
         for frame, line_number in [(tb_frame, tb_lineno) for tb_frame, tb_lineno in traceback.walk_tb(exception.__traceback__)]:
             filename = frame.f_code.co_filename
             function_name = frame.f_code.co_name
@@ -149,7 +154,6 @@ class DecipherMonitor(BaseHTTPMiddleware):
         
         return formatted_trace
     
-    @safe_method
     def get_code_context(self, filename, line_number, context=5):
         start_line = max(1, line_number - context)
         end_line = line_number + context
@@ -168,12 +172,17 @@ class DecipherMonitor(BaseHTTPMiddleware):
     def get_local_variables(self, frame):
         return {var: repr(value) for var, value in frame.f_locals.items()}
 
-    @safe_method
     async def send_to_decipher(self, data):
         try:
-            await requests.post(self.endpoint, json=data)
-        except requests.RequestException as e:
+            async with httpx.AsyncClient() as client:
+                await client.post(self.endpoint, json=data)
+        except httpx.RequestError as e:
+            # Handle exceptions that occur during the request
             pass
+        # try:
+        #     await requests.post(self.endpoint, json=data)
+        # except requests.RequestException as e:
+        #     pass
 
     def custom_print(self, *args, **kwargs):
         messages = current_messages.get()
@@ -198,7 +207,6 @@ def init(app, codebase_id, customer_id):
     _decipher_monitor_instance = DecipherMonitor(app, codebase_id, customer_id)
     app.add_middleware(DecipherMonitor, codebase_id=codebase_id, customer_id=customer_id)
 
-@safe_method
 async def capture_error(error):
     request = current_request.get()
     if request and _decipher_monitor_instance:

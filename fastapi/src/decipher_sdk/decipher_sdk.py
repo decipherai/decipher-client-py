@@ -11,7 +11,6 @@ import asyncio
 import linecache
 from contextvars import ContextVar
 from fastapi import Request
-import threading
 
 current_request = ContextVar("decipher_current_request")
 current_messages = ContextVar("current_messages", default=[])

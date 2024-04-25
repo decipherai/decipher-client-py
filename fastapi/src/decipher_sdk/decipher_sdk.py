@@ -33,8 +33,8 @@ class DecipherMonitor(BaseHTTPMiddleware):
         super().__init__(app)
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        self.endpoint = "http://localhost:3000/api/exception_upload"
+        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        #self.endpoint = "http://localhost:3000/api/exception_upload"
         self.original_print = builtins.print
         builtins.print = self.custom_print
 
@@ -57,12 +57,18 @@ class DecipherMonitor(BaseHTTPMiddleware):
 
 
     async def capture_error_with_response(self, request: Request, response: Response):
-        data = await self.prepare_data(request, response=response)
-        await self.send_to_decipher(data)
+        try:
+            data = await self.prepare_data(request, response=response)
+            await self.send_to_decipher(data)
+        except Exception as e:
+            pass
 
     async def capture_error_with_exception(self, request: Request, exception: Exception, isManual = True):
-        data = await self.prepare_data(request, exception=exception, isManual = isManual)
-        await self.send_to_decipher(data)
+        try:
+            data = await self.prepare_data(request, exception=exception, isManual = isManual)
+            await self.send_to_decipher(data)
+        except Exception as e:
+            pass
 
     async def prepare_data(self, request: Request, response=None, exception=None, isManual = False):
         request_body = await request.body()

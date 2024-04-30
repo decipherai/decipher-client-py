@@ -1,1 +1,1 @@
-from .decipher_sdk import init, capture_error
+from .decipher_sdk import init, capture_error, set_user

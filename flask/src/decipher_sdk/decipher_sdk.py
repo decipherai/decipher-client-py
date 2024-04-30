@@ -24,8 +24,9 @@ class DecipherMonitor:
         self.codebase_id = codebase_id
         self.customer_id = customer_id
         self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        #self.endpoint = "http://localhost:5001/api/exception_upload"
+        #self.endpoint = "http://localhost:3000/api/exception_upload"
         self.messages = []  # Initialize the messages list
+        self.user = None
         self.exception_occurred = False  # Flag to indicate an exception has occurred
         self.connect_to_signals()
 
@@ -48,6 +49,7 @@ class DecipherMonitor:
             self.restore_print()
             if not self.exception_occurred and response.status_code != 200:
                 self.capture_error_with_response(response)
+            self.user = None
             self.clear_messages()
 
     @safe_method
@@ -192,7 +194,8 @@ class DecipherMonitor:
             "response_body": response_body,
             "status_code": status_code,
             "is_uncaught_exception": exception is not None,
-            'messages': self.messages
+            'messages': self.messages,
+            'affected_user': self.user
         }
         return data
 
@@ -230,6 +233,10 @@ class DecipherMonitor:
             return json.dumps(obj, indent=indent, default=str)
         except TypeError:
             return str(obj)
+
+    def set_user(self, user):
+        if all(key in ['id', 'username', 'email'] for key in user):
+            self.user = user
         
 _decipher_monitor_instance = None
 
@@ -240,6 +247,13 @@ def init(codebase_id, customer_id):
 def capture_error(error):
     if _decipher_monitor_instance:
         _decipher_monitor_instance.capture_error(error)
+    else:
+        # Handle the case where DecipherMonitor is not initialized
+        pass
+
+def set_user(user):
+    if _decipher_monitor_instance:
+        _decipher_monitor_instance.set_user(user)
     else:
         # Handle the case where DecipherMonitor is not initialized
         pass

@@ -14,6 +14,7 @@ from fastapi import Request
 
 current_request = ContextVar("decipher_current_request")
 current_messages = ContextVar("current_messages", default=[])
+current_user = ContextVar("current_user", default=None)
 
 def safe_method(func):
     @functools.wraps(func)
@@ -43,6 +44,8 @@ class DecipherMonitor(BaseHTTPMiddleware):
         request = Request(scope, receive=receive)
         request_token = current_request.set(request)
         messages_token = current_messages.set([])
+        user_token = current_user.set(None)
+        
         try:
             # Pass control to the next application in the stack
             await self.app(scope, receive, send)
@@ -53,8 +56,12 @@ class DecipherMonitor(BaseHTTPMiddleware):
         finally:
             current_request.reset(request_token)
             current_messages.reset(messages_token)
+            current_user.reset(user_token)
             builtins.print = self.original_print
 
+    def set_user(self, user):
+        if all(key in ['id', 'username', 'email'] for key in user):
+            current_user.set(user)
 
     async def capture_error_with_response(self, request: Request, response: Response):
         try:
@@ -110,7 +117,8 @@ class DecipherMonitor(BaseHTTPMiddleware):
             "response_body": response_body,
             "status_code": status_code,
             "is_uncaught_exception": exception is not None,
-            'messages': current_messages.get()
+            'messages': current_messages.get(),
+            'affected_user': current_user.get()
         }
 
         return data
@@ -191,9 +199,6 @@ class DecipherMonitor(BaseHTTPMiddleware):
         })
         self.original_print(*args, **kwargs)
 
-    def get_timestamp(self):
-        return datetime.utcnow().isoformat() + 'Z'
-
     def clear_messages(self):
         self.messages = []
 
@@ -213,3 +218,8 @@ def capture_error(error):
                 asyncio.create_task(_decipher_monitor_instance.capture_error_with_exception(request, error, isManual = True))
         except Exception as e:
             asyncio.run(_decipher_monitor_instance.capture_error_with_exception(request, error, isManual = True))
+
+def set_user(user):
+    request = current_request.get()
+    if request and _decipher_monitor_instance:
+        _decipher_monitor_instance.set_user(user)

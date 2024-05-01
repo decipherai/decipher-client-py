@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='decipher_sdk_fastapi',
-    version='0.0.1',
+    version='0.0.22',
     author='Decipher AI',
     author_email='help@getdecipher.com',
     description='A FastAPI SDK for error monitoring and logging.',

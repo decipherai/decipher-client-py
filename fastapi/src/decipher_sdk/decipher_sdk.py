@@ -78,13 +78,13 @@ class DecipherMonitor(BaseHTTPMiddleware):
             pass
 
     async def prepare_data(self, request: Request, response=None, exception=None, isManual = False):
-        request_body = await request.body()
-        try:
-            request_body = json.loads(request_body.decode())
-        except json.JSONDecodeError:
-            request_body = request_body.decode()  # Use raw body if JSON parsing fails
+        # request_body = await request.body()
+        # try:
+        #     request_body = json.loads(request_body.decode())
+        # except json.JSONDecodeError:
+        #     request_body = request_body.decode()  # Use raw body if JSON parsing fails
 
-        # Initialize response data
+        # # Initialize response data
         response_body = {}
 
         if (isManual):
@@ -113,7 +113,7 @@ class DecipherMonitor(BaseHTTPMiddleware):
             "request_url": str(request.url),
             "request_endpoint": str(request.url.path),
             "request_headers": dict(request.headers),
-            "request_body": request_body,
+            "request_body": None,
             "response_body": response_body,
             "status_code": status_code,
             "is_uncaught_exception": exception is not None,
@@ -186,7 +186,7 @@ class DecipherMonitor(BaseHTTPMiddleware):
         try:
             await asyncio.to_thread(requests.post, self.endpoint, json=data)
         except requests.RequestException as e:
-            print(f"Failed to send error data: {str(e)}")
+            pass
 
 
     def custom_print(self, *args, **kwargs):

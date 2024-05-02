@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: decipher-sdk
-Version: 0.0.2
+Version: 0.0.15
 Summary: Flask SDK for Decipher AI
 Author: Decipher AI, Inc
 Author-email: michael@getdecipher.com

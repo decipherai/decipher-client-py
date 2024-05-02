@@ -23,11 +23,13 @@ class DecipherMonitor:
     def __init__(self, codebase_id, customer_id):
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        #self.endpoint = "http://localhost:3000/api/exception_upload"
+        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        self.endpoint = "http://localhost:3000/api/exception_upload"
         self.messages = []  # Initialize the messages list
         self.user = None
-        self.exception_occurred = False  # Flag to indicate an exception has occurred
+        self.response = None
+        self.captured_exceptions = []
+        self.uncaught_exception = None
         self.connect_to_signals()
 
     @safe_method
@@ -47,21 +49,34 @@ class DecipherMonitor:
     def teardown_request_handler(self, sender, response, **extra):
         if has_request_context():
             self.restore_print()
-            if not self.exception_occurred and response.status_code != 200:
-                self.capture_error_with_response(response)
-            self.user = None
+            self.response = response;
+            self.handleExceptions();
+
+            #Reset state
             self.clear_messages()
 
     @safe_method
-    def capture_error_with_response(self, response):
-        data = self.prepare_data(response)
+    def handleExceptions(self):
+        if self.uncaught_exception:
+            self.capture_error_with_response(self.response, self.uncaught_exception, True)
+        if self.captured_exceptions:
+            for exception in self.captured_exceptions:
+                self.capture_error_with_response(self.response, exception)
+        self.response = None
+        self.user = None
+        self.uncaught_exception = None
+        self.captured_exceptions = []
+
+    @safe_method
+    def capture_error_with_response(self, response, exception, is_uncaught_exception=False):
+        data = self.prepare_data(response, exception, is_uncaught_exception)
         self.send_to_decipher(data)
 
     @safe_method
     def capture_error_handler(self, sender, exception, **extra):
-        self.exception_occurred = True  # Set the flag when an exception is caught
+        self.uncaught_exception = exception
         if has_request_context():
-            self.capture_error_with_exception(sender, exception, **extra)
+            self.handleExceptions()
 
     @safe_method
     def get_request_body(self):
@@ -109,9 +124,9 @@ class DecipherMonitor:
         self.original_print(*args, **kwargs)
 
     @safe_method
-    def capture_error_with_exception(self, sender, exception, **extra):
+    def capture_error_with_exception(self, sender, **extra):
         if has_request_context():
-            data = self.prepare_data(exception=exception)
+            data = self.prepare_data()
             self.send_to_decipher(data)
         #stack_trace = "\n".join(traceback.format_stack()) if response else traceback.format_exc()
 
@@ -167,10 +182,15 @@ class DecipherMonitor:
 
         return formatted_trace
 
+
     @safe_method
-    def prepare_data(self, response=None, exception=None):
+    def append_error(self, error):
+        self.captured_exceptions.append(error)
+
+    @safe_method
+    def prepare_data(self, response, exception, is_uncaught_exception=False):
         request_body = self.get_request_body()
-        stack_trace = self.get_stack_trace_with_code(exception) if exception else ""
+        stack_trace = self.get_stack_trace_with_code(exception)
         #stack_trace = "\n".join(traceback.format_stack()) if response else traceback.format_exc()
 
         response_body = {}
@@ -193,7 +213,7 @@ class DecipherMonitor:
             "request_body": request_body,
             "response_body": response_body,
             "status_code": status_code,
-            "is_uncaught_exception": exception is not None,
+            "is_uncaught_exception": is_uncaught_exception,
             'messages': self.messages,
             'affected_user': self.user
         }
@@ -246,7 +266,7 @@ def init(codebase_id, customer_id):
 
 def capture_error(error):
     if _decipher_monitor_instance:
-        _decipher_monitor_instance.capture_error(error)
+        _decipher_monitor_instance.append_error(error)
     else:
         # Handle the case where DecipherMonitor is not initialized
         pass

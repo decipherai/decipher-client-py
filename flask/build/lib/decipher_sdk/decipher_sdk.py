@@ -23,8 +23,8 @@ class DecipherMonitor:
     def __init__(self, codebase_id, customer_id):
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        self.endpoint = "http://localhost:3000/api/exception_upload"
+        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        #self.endpoint = "http://localhost:3000/api/exception_upload"
         self.messages = []  # Initialize the messages list
         self.user = None
         self.response = None

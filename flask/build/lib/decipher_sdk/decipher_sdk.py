@@ -153,7 +153,7 @@ class DecipherMonitor:
         
         tb = traceback.extract_tb(exception.__traceback__)
         formatted_trace = []
-        context = 5 
+        context = 10
         for frame, line_number in [(tb_frame, tb_lineno) for tb_frame, tb_lineno in traceback.walk_tb(exception.__traceback__)]:
             filename = frame.f_code.co_filename
             function_name = frame.f_code.co_name

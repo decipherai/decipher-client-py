@@ -23,8 +23,8 @@ class DecipherMonitor:
     def __init__(self, codebase_id, customer_id):
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        self.endpoint = "http://localhost:3000/api/exception_upload"
+        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        #self.endpoint = "http://localhost:3000/api/exception_upload"
         self.messages = []  # Initialize the messages list
         self.user = None
         self.response = None
@@ -154,7 +154,6 @@ class DecipherMonitor:
         tb = traceback.extract_tb(exception.__traceback__)
         formatted_trace = []
         context = 40
-        print("THIS IS HAPPENING")
         for frame, line_number in [(tb_frame, tb_lineno) for tb_frame, tb_lineno in traceback.walk_tb(exception.__traceback__)]:
             filename = frame.f_code.co_filename
             function_name = frame.f_code.co_name

@@ -23,8 +23,8 @@ class DecipherMonitor:
     def __init__(self, codebase_id, customer_id):
         self.codebase_id = codebase_id
         self.customer_id = customer_id
-        self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
-        #self.endpoint = "http://localhost:3000/api/exception_upload"
+        #self.endpoint = "https://prod.getdecipher.com/api/exception_upload"
+        self.endpoint = "http://localhost:3000/api/exception_upload"
         self.messages = []  # Initialize the messages list
         self.user = None
         self.response = None
@@ -153,19 +153,23 @@ class DecipherMonitor:
         
         tb = traceback.extract_tb(exception.__traceback__)
         formatted_trace = []
-        context = 10
+        context = 40
+        print("THIS IS HAPPENING")
         for frame, line_number in [(tb_frame, tb_lineno) for tb_frame, tb_lineno in traceback.walk_tb(exception.__traceback__)]:
             filename = frame.f_code.co_filename
             function_name = frame.f_code.co_name
             start_line = max(1, line_number - context)
             code_context = self.get_code_context(filename, line_number, context)
             locals = self.get_local_variables(frame)
+            highlight_index = line_number - start_line
+            if highlight_index >= len(code_context):
+                highlight_index = len(code_context) - 1 
             formatted_trace.append({
                 "file": filename,
                 "line": line_number,
                 "function": function_name,
                 "code": code_context,
-                "highlight_index": context,
+                "highlight_index": highlight_index,
                 "start_line": start_line,
                 "locals": locals,  # Add local variables to the trace
             })
